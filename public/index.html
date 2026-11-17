@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secure Login System</title>
+<style>
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;display:flex;justify-content:center;padding:40px 16px}
+main{background:#fff;border:1px solid #000;width:100%;max-width:420px;padding:28px}h1{font-size:22px;margin:0 0 4px}
+p.sub{margin:0 0 18px;color:#444;font-size:14px}nav{display:flex;gap:8px;margin-bottom:18px}
+nav button{flex:1;padding:8px;border:1px solid #000;background:#fff;cursor:pointer}nav button.on{background:#000;color:#fff}
+label{display:block;font-size:13px;margin:12px 0 4px}input{width:100%;padding:9px;border:1px solid #000;font-size:15px}
+.go{width:100%;margin-top:16px;padding:10px;background:#000;color:#fff;border:0;font-size:15px;cursor:pointer}
+.msg{margin-top:14px;padding:10px;font-size:13px;border:1px solid #000;word-break:break-all}.err{background:#fde8e8}.ok{background:#e8f6e8}
+code{background:#eee;padding:2px 5px}.row{display:flex;gap:8px}.row button{flex:1}
+</style></head><body><main>
+<h1>Secure Login System</h1><p class="sub">Salt + pepper hashing · Two-step authentication · Cloud backup</p>
+<div id="app"></div></main>
+<script>
+let S={tab:'login',step:1,pending:null,session:null,user:null,msg:null};
+const $=s=>document.querySelector(s);
+async function api(a,body,auth){const r=await fetch('/api/'+a,{method:'POST',headers:{'Content-Type':'application/json',...(auth?{Authorization:'Bearer '+S.session}:{})},body:JSON.stringify(body||{})});return{ok:r.ok,...await r.json()}}
+const msg=(t,ok)=>{S.msg={t,ok};draw()};
+function draw(){let h='';
+ if(!S.session){h+=`<nav><button id="tl" class="${S.tab=='login'?'on':''}">Log in</button><button id="tr" class="${S.tab=='reg'?'on':''}">Register</button></nav>`;
+  if(S.tab=='reg')h+=`<label>Username</label><input id="u"><label>Password</label><input id="p" type="password"><button class="go" id="reg">Create account</button>`;
+  else if(S.step==1)h+=`<label>Username</label><input id="u"><label>Password</label><input id="p" type="password"><button class="go" id="l1">Step 1: Continue</button>`;
+  else h+=`<label>Step 2: 6-digit code from your authenticator app</label><input id="c" maxlength="6" inputmode="numeric"><button class="go" id="l2">Step 2: Verify and log in</button>`;
+ }else h+=`<p><b>Welcome, ${S.user}</b> — both steps completed.</p><div class="row"><button class="go" id="bk">Backup to cloud</button><button class="go" id="rs">Restore</button></div><button class="go" id="lo" style="background:#fff;color:#000;border:1px solid #000">Log out</button>`;
+ if(S.msg)h+=`<div class="msg ${S.msg.ok?'ok':'err'}">${S.msg.t}</div>`;
+ $('#app').innerHTML=h;if($('#u')){$('#u').value=S.u||'';$('#u').oninput=e=>S.u=e.target.value}const on=(i,f)=>$('#'+i)&&($('#'+i).onclick=f);
+ on('tl',()=>{S.tab='login';S.msg=null;draw()});on('tr',()=>{S.tab='reg';S.msg=null;draw()});
+ on('reg',async()=>{const r=await api('register',{username:$('#u').value,password:$('#p').value});
+  r.ok?msg(`Account created. Add this key to Google Authenticator / Authy (time-based): <code>${r.secret}</code>`,1):msg(r.error)});
+ on('l1',async()=>{const r=await api('login',{username:$('#u').value,password:$('#p').value});
+  if(r.ok){S.pending=r.pending;S.step=2;S.msg=null;draw()}else msg(r.error)});
+ on('l2',async()=>{const r=await api('verify',{pending:S.pending,code:$('#c').value});
+  if(r.ok){S.session=r.session;S.user=r.user;S.msg=null;draw()}else{msg(r.error);if(/expired\. Log/.test(r.error)){S.step=1}}});
+ on('bk',async()=>{const r=await api('backup',{},1);r.ok?msg(`Backup complete: ${r.count} user(s) saved to the cloud.`,1):msg(r.error)});
+ on('rs',async()=>{const r=await api('restore',{},1);r.ok?msg(`Restored ${r.count} user(s) from the cloud backup.`,1):msg(r.error)});
+ on('lo',()=>{S={tab:'login',step:1,pending:null,session:null,user:null,msg:null,u:''};draw()});}
+draw();
+</script></body></html>
